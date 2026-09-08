@@ -15,6 +15,7 @@
           <select id="provider">
             <option value="ollama">Ollama</option>
             <option value="chrome">Chrome Prompt API</option>
+            <option value="gemini">Gemini (cloud)</option>
           </select>
         </label>
         <button id="toggleConfig" class="link" type="button">config</button>
@@ -47,6 +48,21 @@
         Chrome Prompt API uses the built-in on-device model (Gemini Nano) in
         structured-JSON mode. No URL or model name needed.
       </p>
+      <div id="geminiConfig" class="hidden">
+        <label>
+          Gemini API key
+          <input id="apiKey" type="password" placeholder="AIza… (stored locally, never committed)" autocomplete="off" />
+        </label>
+        <label>
+          Gemini model
+          <input id="geminiModel" type="text" placeholder="gemini-3.8-flash" />
+        </label>
+        <p class="note warn">
+          ⚠ Cloud provider. Your prompt and the page's tool descriptions are
+          sent to Google. Falls back to older Flash models if the chosen one
+          isn't available.
+        </p>
+      </div>
       <label>
         Max steps
         <input id="maxSteps" type="number" min="1" max="20" />

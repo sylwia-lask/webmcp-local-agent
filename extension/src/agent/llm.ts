@@ -31,6 +31,12 @@ export interface LlmToolCall {
     /** Arguments as a parsed object. */
     arguments: Record<string, unknown>;
   };
+  /**
+   * Opaque provider-specific reasoning token attached to this call. Gemini 3
+   * requires its `thoughtSignature` to be echoed back verbatim on the next
+   * turn during function calling. Other providers leave this undefined.
+   */
+  signature?: string;
 }
 
 export interface LlmProvider {

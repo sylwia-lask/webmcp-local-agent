@@ -92,7 +92,8 @@ button.link {
   font-size: 12px;
   line-height: 1.4;
 }
-#ollamaConfig { display: flex; flex-direction: column; gap: 8px; }
+#ollamaConfig, #geminiConfig { display: flex; flex-direction: column; gap: 8px; }
+.note.warn { color: var(--err); }
 
 .prompt { padding: 12px; border-bottom: 1px solid var(--border); }
 .prompt textarea {

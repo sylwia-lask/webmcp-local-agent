@@ -12,6 +12,7 @@ import { runAgent } from "../agent/agent";
 import type { LlmProvider } from "../agent/llm";
 import { OllamaProvider } from "../agent/providers/ollama-provider";
 import { ChromePromptApiProvider } from "../agent/providers/chrome-prompt-provider";
+import { GeminiApiProvider } from "../agent/providers/gemini-provider";
 import type {
   AgentEvent,
   ContentReply,
@@ -82,6 +83,9 @@ function buildProvider(cfg: Awaited<ReturnType<typeof loadConfig>>, tabId: numbe
       prompt: (input, responseConstraint) => promptInTab(tabId, input, responseConstraint),
     });
   }
+  if (cfg.provider === "gemini") {
+    return new GeminiApiProvider(cfg);
+  }
   return new OllamaProvider(cfg);
 }
 
@@ -124,13 +128,21 @@ async function handleRun(
       return;
     }
 
-    emit({
-      kind: "info",
-      message:
-        cfg.provider === "chrome"
-          ? `Using ${provider.label} (Gemini Nano, JSON mode).`
-          : `Using ${provider.label} model "${cfg.model}" at ${cfg.ollamaUrl} (${cfg.toolMode} mode).`,
-    });
+    if (cfg.provider === "chrome") {
+      emit({ kind: "info", message: `Using ${provider.label} (Gemini Nano, JSON mode).` });
+    } else if (cfg.provider === "gemini") {
+      emit({
+        kind: "info",
+        message:
+          `⚠ Using ${provider.label} model "${cfg.geminiModel}". ` +
+          "This is a CLOUD provider — your prompt and the page's tool descriptions are sent to Google.",
+      });
+    } else {
+      emit({
+        kind: "info",
+        message: `Using ${provider.label} model "${cfg.model}" at ${cfg.ollamaUrl} (${cfg.toolMode} mode).`,
+      });
+    }
 
     await runAgent(cfg, prompt, {
       provider,

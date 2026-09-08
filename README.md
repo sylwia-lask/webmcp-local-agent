@@ -5,10 +5,14 @@ command in natural language into a side panel, e.g.:
 
 > Add a new employee named John Smith
 
-You can pick the LLM backend with one click: **Ollama** (local server) or the
-**Chrome Prompt API** (built-in on-device Gemini Nano). The rest of the flow —
-tool discovery, prompt building, tool selection, execution — is identical for
-both.
+You can pick the LLM backend with one click:
+
+- **Ollama** — local server (native tools + JSON fallback).
+- **Chrome Prompt API** — built-in on-device Gemini Nano (JSON mode).
+- **Gemini (cloud)** — Google Gemini via API key (native function calling).
+
+The rest of the flow — tool discovery, prompt building, tool selection,
+execution — is identical for all three.
 
 The agent then:
 
@@ -78,6 +82,7 @@ webmcp-local-agent/
         providers/
           ollama-provider.ts        Ollama /api/chat backend
           chrome-prompt-provider.ts Chrome LanguageModel backend (via page bridge)
+          gemini-provider.ts        Gemini cloud backend (API key + model fallback)
       background/
         service-worker.ts   message routing, tab bridge, runs the loop
       content/
@@ -170,10 +175,12 @@ The default model lives in `extension/src/config.ts`:
 
 ```ts
 export const DEFAULT_CONFIG: AgentConfig = {
-  provider: "ollama",      // "ollama" | "chrome"
+  provider: "ollama",         // "ollama" | "chrome" | "gemini"
   ollamaUrl: "http://localhost:11434",
-  model: "llama3.1",      // <-- change the Ollama model here
-  toolMode: "auto",        // "auto" | "native" | "json"
+  model: "llama3.1",         // <-- Ollama model
+  apiKey: "",                 // Gemini key — set in the UI, never commit
+  geminiModel: "gemini-3.8-flash",
+  toolMode: "auto",           // "auto" | "native" | "json"
   maxSteps: 5,
 };
 ```
@@ -266,6 +273,11 @@ At the top of the panel, use the **Provider** dropdown:
 - **Chrome Prompt API** — needs a Chrome build where
   `await LanguageModel.availability()` returns `"available"`. No Ollama, no URL,
   no model name. Runs entirely on-device.
+- **Gemini (cloud)** — open **config**, paste a Gemini API key (from
+  [Google AI Studio](https://aistudio.google.com/apikey)), optionally set the
+  model (default `gemini-3.8-flash`), and **Save config**. The key is stored in
+  `chrome.storage.local` and never leaves your machine except in requests to
+  Google's API. **Do not commit a real key.**
 
 Switch, then click **Run** with the same prompt to compare. The agent checks
 availability first: if the selected provider isn't ready, you get a clear error
@@ -297,6 +309,14 @@ interface LlmProvider {
   uses Chrome's built-in `LanguageModel` (Gemini Nano). No native tool calling,
   so it always runs the JSON protocol, with `responseConstraint` (JSON Schema)
   for structured output.
+- **`GeminiApiProvider`** (`agent/providers/gemini-provider.ts`) — calls the
+  Gemini REST `generateContent` endpoint with an API key. Native function
+  calling. Defaults to `gemini-3.8-flash` and **falls back** through older Flash
+  models (`GEMINI_FALLBACK_MODELS`) if the chosen one isn't available for your
+  key. Preserves Gemini 3 **thought signatures** (the opaque reasoning token
+  attached to each function call) and echoes them back on the next turn, as the
+  API requires for multi-step tool calling. **Cloud provider**: prompts and tool
+  descriptions are sent to Google.
 
 The **agent loop is provider-agnostic**: it only calls `chatWithTools` /
 `chatJson` and always parses the same contract
@@ -375,6 +395,8 @@ are fast.
 | "WebMCP is not available…" | Enable the WebMCP flag in `chrome://flags`; the page may register no tools. |
 | "Chrome Prompt API is not available…" | `LanguageModel` missing — use a Chrome build with built-in AI enabled, on a normal http(s) tab. |
 | Chrome provider says model is "downloadable" | The on-device model still needs to finish downloading before use. |
+| "No Gemini API key set" | Open config, paste a key from Google AI Studio, Save config. |
+| "Gemini API … 400/403" | Bad/expired key or the model isn't enabled for your key; the provider auto-falls-back through older Flash models. |
 | "Could not reach the page's content script" | Reload the tab; not available on `chrome://` or the Web Store. |
 | Model calls one tool and stops | Phrase the request as multiple steps; or use a stronger model. Weaker models do the minimum. |
 | Empty / malformed tool calls | Model too weak for tool calling — use `llama3.1` or `qwen3:8b`. |

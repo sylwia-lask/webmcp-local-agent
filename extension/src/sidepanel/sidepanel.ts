@@ -22,8 +22,11 @@ const toggleConfigBtn = $("toggleConfig");
 const configPanel = $("configPanel");
 const ollamaConfig = $("ollamaConfig");
 const chromeConfigNote = $("chromeConfigNote");
+const geminiConfig = $("geminiConfig");
 const ollamaUrlInput = $<HTMLInputElement>("ollamaUrl");
 const modelInput = $<HTMLInputElement>("model");
+const apiKeyInput = $<HTMLInputElement>("apiKey");
+const geminiModelInput = $<HTMLInputElement>("geminiModel");
 const toolModeSelect = $<HTMLSelectElement>("toolMode");
 const maxStepsInput = $<HTMLInputElement>("maxSteps");
 const saveConfigBtn = $("saveConfig");
@@ -38,18 +41,23 @@ async function refreshConfigUI(): Promise<void> {
   providerSelect.value = cfg.provider;
   ollamaUrlInput.value = cfg.ollamaUrl;
   modelInput.value = cfg.model;
+  apiKeyInput.value = cfg.apiKey;
+  geminiModelInput.value = cfg.geminiModel;
   toolModeSelect.value = cfg.toolMode;
   maxStepsInput.value = String(cfg.maxSteps);
-  applyProviderUI(cfg.provider, cfg.model);
+  applyProviderUI(cfg);
 }
 
 /** Show/hide provider-specific fields and update the header label. */
-function applyProviderUI(provider: AgentConfig["provider"], model: string): void {
-  const isChrome = provider === "chrome";
-  ollamaConfig.classList.toggle("hidden", isChrome);
+function applyProviderUI(cfg: AgentConfig): void {
+  const isChrome = cfg.provider === "chrome";
+  const isGemini = cfg.provider === "gemini";
+  const isOllama = cfg.provider === "ollama";
+  ollamaConfig.classList.toggle("hidden", !isOllama);
   chromeConfigNote.classList.toggle("hidden", !isChrome);
+  geminiConfig.classList.toggle("hidden", !isGemini);
   modelLine.classList.toggle("hidden", isChrome);
-  modelLabel.textContent = model;
+  modelLabel.textContent = isGemini ? cfg.geminiModel : cfg.model;
 }
 
 // One-click provider switch: persist immediately, no need to open config.
@@ -57,7 +65,7 @@ providerSelect.addEventListener("change", async () => {
   const provider = providerSelect.value as AgentConfig["provider"];
   await saveConfig({ provider });
   const cfg = await loadConfig();
-  applyProviderUI(provider, cfg.model);
+  applyProviderUI(cfg);
   appendEntry({ kind: "info", message: `Provider switched to ${providerSelect.selectedOptions[0].text}.` });
 });
 
@@ -67,6 +75,8 @@ saveConfigBtn.addEventListener("click", async () => {
   const patch: Partial<AgentConfig> = {
     ollamaUrl: ollamaUrlInput.value.trim() || "http://localhost:11434",
     model: modelInput.value.trim() || "llama3.1",
+    apiKey: apiKeyInput.value.trim(),
+    geminiModel: geminiModelInput.value.trim() || "gemini-3.8-flash",
     toolMode: toolModeSelect.value as AgentConfig["toolMode"],
     maxSteps: Math.max(1, Math.min(20, Number(maxStepsInput.value) || 5)),
   };

@@ -45,13 +45,9 @@ interface LanguageModelSession {
   destroy?: () => void;
 }
 
-interface LanguageModelCreateOptions {
-  monitor?: (m: EventTarget) => void;
-}
-
 interface LanguageModelStatic {
   availability: () => Promise<string>;
-  create: (opts?: LanguageModelCreateOptions) => Promise<LanguageModelSession>;
+  create: () => Promise<LanguageModelSession>;
 }
 
 function getLanguageModel(): LanguageModelStatic | null {
@@ -179,16 +175,9 @@ async function handlePrompt(req: PromptRequest): Promise<void> {
     return;
   }
   try {
-    // First use can trigger an on-device model download; the monitor surfaces
-    // progress instead of appearing to hang.
-    const session = await lm.create({
-      monitor(m) {
-        m.addEventListener("downloadprogress", (e) => {
-          const ev = e as ProgressEvent;
-          console.debug(`[webmcp-agent] model download: ${Math.round((ev.loaded ?? 0) * 100)}%`);
-        });
-      },
-    });
+    // First use can trigger an on-device model download; create() awaits it.
+    // This is why the prompt bridge uses a generous timeout in the content script.
+    const session = await lm.create();
     try {
       const text = await session.prompt(
         req.prompt,

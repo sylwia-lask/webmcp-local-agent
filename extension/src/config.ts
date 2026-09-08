@@ -11,12 +11,23 @@ export interface AgentConfig {
    *  - "ollama": local Ollama server (native tools + JSON fallback).
    *  - "chrome": Chrome built-in Prompt API (LanguageModel / Gemini Nano),
    *              JSON protocol only.
+   *  - "gemini": Google Gemini via API key (cloud; native function calling).
    */
-  provider: "ollama" | "chrome";
+  provider: "ollama" | "chrome" | "gemini";
   /** Base URL of the local Ollama server. */
   ollamaUrl: string;
   /** Model name as it appears in `ollama list`, e.g. "llama3.1" or "qwen2.5". */
   model: string;
+  /**
+   * Gemini API key (cloud provider). Empty by default — enter it only in the
+   * UI. Never commit a real key. Stored in chrome.storage.local.
+   */
+  apiKey: string;
+  /**
+   * Preferred Gemini model. If a request fails with "model not found", the
+   * provider automatically falls back through GEMINI_FALLBACK_MODELS.
+   */
+  geminiModel: string;
   /**
    * Tool-calling strategy:
    *  - "native": use Ollama's /api/chat `tools` field (model must support tools).
@@ -33,9 +44,23 @@ export const DEFAULT_CONFIG: AgentConfig = {
   provider: "ollama",
   ollamaUrl: "http://localhost:11434",
   model: "llama3.1",
+  apiKey: "",
+  geminiModel: "gemini-3.8-flash",
   toolMode: "auto",
   maxSteps: 5,
 };
+
+/**
+ * Fallback chain for the Gemini provider, newest first. If the configured
+ * model isn't available for the key, the provider tries the next one.
+ */
+export const GEMINI_FALLBACK_MODELS = [
+  "gemini-3.8-flash",
+  "gemini-3.7-flash",
+  "gemini-3.6-flash",
+  "gemini-3.5-flash",
+  "gemini-2.5-flash",
+] as const;
 
 const STORAGE_KEY = "webmcp-agent-config";
 
