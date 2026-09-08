@@ -61,6 +61,18 @@ export type BridgeRequest =
       toolName: string;
       /** Arguments as a JSON string, per document.modelContext.executeTool. */
       argsJson: string;
+    }
+  // Chrome Prompt API (LanguageModel) lives in the page's main world, so we
+  // reach it through the same bridge we already use for WebMCP.
+  | { source: "webmcp-agent"; direction: "request"; id: string; op: "promptAvailability" }
+  | {
+      source: "webmcp-agent";
+      direction: "request";
+      id: string;
+      op: "prompt";
+      prompt: string;
+      /** Optional JSON Schema passed as responseConstraint for structured output. */
+      responseConstraint?: JSONSchema;
     };
 
 export type BridgeResponse =
@@ -71,6 +83,10 @@ export type BridgeResponse =
       ok: true;
       tools?: WebMcpTool[];
       result?: string;
+      /** For promptAvailability: the raw availability string. */
+      availability?: string;
+      /** For prompt: the model's text response. */
+      text?: string;
     }
   | {
       source: "webmcp-agent";
@@ -86,8 +102,10 @@ export type BridgeResponse =
 
 export type WorkerToContentMessage =
   | { type: "WEBMCP_GET_TOOLS" }
-  | { type: "WEBMCP_EXECUTE_TOOL"; toolName: string; argsJson: string };
+  | { type: "WEBMCP_EXECUTE_TOOL"; toolName: string; argsJson: string }
+  | { type: "PROMPT_AVAILABILITY" }
+  | { type: "PROMPT_RUN"; prompt: string; responseConstraint?: JSONSchema };
 
 export type ContentReply =
-  | { ok: true; tools?: WebMcpTool[]; result?: string }
+  | { ok: true; tools?: WebMcpTool[]; result?: string; availability?: string; text?: string }
   | { ok: false; error: string };

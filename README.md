@@ -5,10 +5,15 @@ command in natural language into a side panel, e.g.:
 
 > Add a new employee named John Smith
 
+You can pick the LLM backend with one click: **Ollama** (local server) or the
+**Chrome Prompt API** (built-in on-device Gemini Nano). The rest of the flow —
+tool discovery, prompt building, tool selection, execution — is identical for
+both.
+
 The agent then:
 
 1. discovers the **WebMCP** tools exposed by the current tab (`document.modelContext.getTools()`),
-2. sends your prompt + the tool list to a **local Ollama model**,
+2. sends your prompt + the tool list to the **selected LLM provider**,
 3. lets the model decide which tool to call and with what arguments,
 4. executes that tool in the page (`document.modelContext.executeTool()`),
 5. feeds the result back to the model,
@@ -68,8 +73,11 @@ webmcp-local-agent/
       config.ts             ollamaUrl / model / toolMode / maxSteps + storage
       agent/
         types.ts            shared types + message contracts
-        ollama.ts           Ollama /api/chat client (native tools + JSON fallback)
-        agent.ts            the agent loop + validation/security
+        llm.ts              LlmProvider interface + shared message shapes
+        agent.ts            the agent loop + validation/security (provider-agnostic)
+        providers/
+          ollama-provider.ts        Ollama /api/chat backend
+          chrome-prompt-provider.ts Chrome LanguageModel backend (via page bridge)
       background/
         service-worker.ts   message routing, tab bridge, runs the loop
       content/
@@ -162,8 +170,9 @@ The default model lives in `extension/src/config.ts`:
 
 ```ts
 export const DEFAULT_CONFIG: AgentConfig = {
+  provider: "ollama",      // "ollama" | "chrome"
   ollamaUrl: "http://localhost:11434",
-  model: "llama3.1",      // <-- change the model here
+  model: "llama3.1",      // <-- change the Ollama model here
   toolMode: "auto",        // "auto" | "native" | "json"
   maxSteps: 5,
 };
@@ -249,11 +258,67 @@ natural-language command.
 **What you'll see in the log:** your prompt → discovered WebMCP tools → the tool
 call the model chose + arguments → the tool result → the final answer.
 
+### Switching providers (Ollama ↔ Chrome Prompt API)
+
+At the top of the panel, use the **Provider** dropdown:
+
+- **Ollama** — needs `ollama serve` running and a pulled model (steps 2-4).
+- **Chrome Prompt API** — needs a Chrome build where
+  `await LanguageModel.availability()` returns `"available"`. No Ollama, no URL,
+  no model name. Runs entirely on-device.
+
+Switch, then click **Run** with the same prompt to compare. The agent checks
+availability first: if the selected provider isn't ready, you get a clear error
+in the log instead of a crash.
+
+> Note: the Chrome provider calls `LanguageModel` **in the page**, so the model
+> is only reachable on a normal http(s) tab (not `chrome://`). Reload the tab
+> after loading the extension.
+
 ---
+
+## LLM providers
+
+Both providers implement one interface (`extension/src/agent/llm.ts`):
+
+```ts
+interface LlmProvider {
+  label: string;
+  supportsNativeTools?: boolean;
+  isAvailable(): Promise<{ ok: boolean; detail?: string }>;
+  chatWithTools(messages, tools): Promise<LlmMessage>;   // native tool calling
+  chatJson(messages, responseConstraint?): Promise<LlmMessage>; // JSON protocol
+}
+```
+
+- **`OllamaProvider`** (`agent/providers/ollama-provider.ts`) — talks to the
+  local Ollama `/api/chat`. Supports native tool calling and JSON mode.
+- **`ChromePromptApiProvider`** (`agent/providers/chrome-prompt-provider.ts`) —
+  uses Chrome's built-in `LanguageModel` (Gemini Nano). No native tool calling,
+  so it always runs the JSON protocol, with `responseConstraint` (JSON Schema)
+  for structured output.
+
+The **agent loop is provider-agnostic**: it only calls `chatWithTools` /
+`chatJson` and always parses the same contract
+(`{type:"tool_call",tool,arguments}` or `{type:"final",message}`).
+
+### Where the provider is chosen
+
+- **UI**: the **Provider** dropdown at the top of the side panel (one-click
+  switch, no need to open config). The choice is saved to `chrome.storage.local`.
+- **Code**: the service worker reads `cfg.provider` and builds the matching
+  provider in `buildProvider()` (`background/service-worker.ts`).
+
+### Why the Prompt API goes through the page bridge
+
+`window.LanguageModel` lives in the page's **main world**, not the service
+worker. So the Chrome provider routes its calls through the *same* page bridge we
+already use for WebMCP: service worker → content script → page bridge (main
+world) → `LanguageModel.create()` / `session.prompt(...)`. No new plumbing.
 
 ## How tool calling works
 
-- **Native mode**: the tool list is sent to Ollama in the `tools` field
+- **Native mode** (Ollama): the tool list is sent in the `tools` field
   (`/api/chat`), and the model replies with `message.tool_calls`. All parallel
   calls in a single response are executed.
 - **JSON fallback**: if the model can't do native tools (or you pick `json`), the
@@ -308,6 +373,8 @@ are fast.
 | **HTTP 403 Forbidden** | Set `OLLAMA_ORIGINS=*` and restart Ollama (step 4). |
 | "model '…' not found" | Wrong model in config/panel. Check `ollama list` and enter the exact name. |
 | "WebMCP is not available…" | Enable the WebMCP flag in `chrome://flags`; the page may register no tools. |
+| "Chrome Prompt API is not available…" | `LanguageModel` missing — use a Chrome build with built-in AI enabled, on a normal http(s) tab. |
+| Chrome provider says model is "downloadable" | The on-device model still needs to finish downloading before use. |
 | "Could not reach the page's content script" | Reload the tab; not available on `chrome://` or the Web Store. |
 | Model calls one tool and stops | Phrase the request as multiple steps; or use a stronger model. Weaker models do the minimum. |
 | Empty / malformed tool calls | Model too weak for tool calling — use `llama3.1` or `qwen3:8b`. |

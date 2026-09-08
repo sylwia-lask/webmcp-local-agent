@@ -9,9 +9,13 @@
  */
 import { loadConfig } from "../config";
 import { runAgent } from "../agent/agent";
+import type { LlmProvider } from "../agent/llm";
+import { OllamaProvider } from "../agent/providers/ollama-provider";
+import { ChromePromptApiProvider } from "../agent/providers/chrome-prompt-provider";
 import type {
   AgentEvent,
   ContentReply,
+  JSONSchema,
   PanelToWorkerMessage,
   WebMcpTool,
   WorkerToContentMessage,
@@ -56,6 +60,31 @@ async function executeToolInTab(tabId: number, toolName: string, argsJson: strin
   return reply.result ?? "";
 }
 
+/* ---- Chrome Prompt API via the tab bridge (main world) ------------------ */
+
+async function promptAvailabilityInTab(tabId: number): Promise<string> {
+  const reply = await sendToTab(tabId, { type: "PROMPT_AVAILABILITY" });
+  if (!reply.ok) throw new Error(reply.error);
+  return reply.availability ?? "unavailable";
+}
+
+async function promptInTab(tabId: number, prompt: string, responseConstraint?: JSONSchema): Promise<string> {
+  const reply = await sendToTab(tabId, { type: "PROMPT_RUN", prompt, responseConstraint });
+  if (!reply.ok) throw new Error(reply.error);
+  return reply.text ?? "";
+}
+
+/** Build the selected provider, injecting tab-bound calls where needed. */
+function buildProvider(cfg: Awaited<ReturnType<typeof loadConfig>>, tabId: number): LlmProvider {
+  if (cfg.provider === "chrome") {
+    return new ChromePromptApiProvider({
+      availability: () => promptAvailabilityInTab(tabId),
+      prompt: (input, responseConstraint) => promptInTab(tabId, input, responseConstraint),
+    });
+  }
+  return new OllamaProvider(cfg);
+}
+
 /* ---- Panel port: stream events to the UI -------------------------------- */
 
 chrome.runtime.onConnect.addListener((port) => {
@@ -82,9 +111,29 @@ async function handleRun(
 ): Promise<void> {
   try {
     const cfg = await loadConfig();
-    emit({ kind: "info", message: `Using model "${cfg.model}" at ${cfg.ollamaUrl} (${cfg.toolMode} mode).` });
+    const provider = buildProvider(cfg, tabId);
+
+    // Pre-flight availability check so we fail with a clear message instead of
+    // crashing mid-loop.
+    const availability = await provider.isAvailable();
+    if (!availability.ok) {
+      emit({
+        kind: "error",
+        message: `${provider.label} is not available. ${availability.detail ?? ""}`.trim(),
+      });
+      return;
+    }
+
+    emit({
+      kind: "info",
+      message:
+        cfg.provider === "chrome"
+          ? `Using ${provider.label} (Gemini Nano, JSON mode).`
+          : `Using ${provider.label} model "${cfg.model}" at ${cfg.ollamaUrl} (${cfg.toolMode} mode).`,
+    });
 
     await runAgent(cfg, prompt, {
+      provider,
       getTools: () => getToolsFromTab(tabId),
       executeTool: (name, argsJson) => executeToolInTab(tabId, name, argsJson),
       emit,

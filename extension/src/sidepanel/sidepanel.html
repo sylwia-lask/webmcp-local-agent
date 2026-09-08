@@ -10,28 +10,43 @@
     <header>
       <h1>WebMCP Local Agent</h1>
       <div class="model-line">
-        Model: <span id="modelLabel">…</span>
+        <label class="provider-row">
+          Provider:
+          <select id="provider">
+            <option value="ollama">Ollama</option>
+            <option value="chrome">Chrome Prompt API</option>
+          </select>
+        </label>
         <button id="toggleConfig" class="link" type="button">config</button>
+      </div>
+      <div class="model-line" id="modelLine">
+        Model: <span id="modelLabel">…</span>
       </div>
     </header>
 
     <section id="configPanel" class="config hidden">
-      <label>
-        Ollama URL
-        <input id="ollamaUrl" type="text" placeholder="http://localhost:11434" />
-      </label>
-      <label>
-        Model name
-        <input id="model" type="text" placeholder="llama3.1" />
-      </label>
-      <label>
-        Tool mode
-        <select id="toolMode">
-          <option value="auto">auto (native, fallback to JSON)</option>
-          <option value="native">native tool calling</option>
-          <option value="json">structured JSON</option>
-        </select>
-      </label>
+      <div id="ollamaConfig">
+        <label>
+          Ollama URL
+          <input id="ollamaUrl" type="text" placeholder="http://localhost:11434" />
+        </label>
+        <label>
+          Model name
+          <input id="model" type="text" placeholder="llama3.1" />
+        </label>
+        <label>
+          Tool mode
+          <select id="toolMode">
+            <option value="auto">auto (native, fallback to JSON)</option>
+            <option value="native">native tool calling</option>
+            <option value="json">structured JSON</option>
+          </select>
+        </label>
+      </div>
+      <p id="chromeConfigNote" class="note hidden">
+        Chrome Prompt API uses the built-in on-device model (Gemini Nano) in
+        structured-JSON mode. No URL or model name needed.
+      </p>
       <label>
         Max steps
         <input id="maxSteps" type="number" min="1" max="20" />

@@ -37,6 +37,28 @@ function getModelContext(): ModelContextLike | null {
   return mc ?? null;
 }
 
+/* ---- Chrome Prompt API (LanguageModel) ---------------------------------- */
+// Also a main-world global, so we reach it from the same bridge.
+
+interface LanguageModelSession {
+  prompt: (input: string, opts?: { responseConstraint?: unknown }) => Promise<string>;
+  destroy?: () => void;
+}
+
+interface LanguageModelCreateOptions {
+  monitor?: (m: EventTarget) => void;
+}
+
+interface LanguageModelStatic {
+  availability: () => Promise<string>;
+  create: (opts?: LanguageModelCreateOptions) => Promise<LanguageModelSession>;
+}
+
+function getLanguageModel(): LanguageModelStatic | null {
+  const lm = (globalThis as unknown as { LanguageModel?: LanguageModelStatic }).LanguageModel;
+  return lm ?? null;
+}
+
 /** Strip non-serializable fields (e.g. the live `window` ref) for messaging. */
 function toSerializable(tool: RawTool): WebMcpTool {
   return {
@@ -54,6 +76,12 @@ function post(response: BridgeResponse): void {
 }
 
 async function handle(req: BridgeRequest): Promise<void> {
+  // Chrome Prompt API ops don't need WebMCP, so handle them first.
+  if (req.op === "promptAvailability" || req.op === "prompt") {
+    await handlePrompt(req);
+    return;
+  }
+
   const mc = getModelContext();
   if (!mc) {
     post({
@@ -102,6 +130,77 @@ async function handle(req: BridgeRequest): Promise<void> {
       return;
     }
   } catch (err) {
+    post({
+      source: SOURCE,
+      direction: "response",
+      id: req.id,
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+type PromptRequest = Extract<BridgeRequest, { op: "promptAvailability" | "prompt" }>;
+
+async function handlePrompt(req: PromptRequest): Promise<void> {
+  const lm = getLanguageModel();
+
+  if (req.op === "promptAvailability") {
+    if (!lm) {
+      post({ source: SOURCE, direction: "response", id: req.id, ok: true, availability: "unavailable" });
+      return;
+    }
+    try {
+      const availability = await lm.availability();
+      post({ source: SOURCE, direction: "response", id: req.id, ok: true, availability });
+    } catch (err) {
+      post({
+        source: SOURCE,
+        direction: "response",
+        id: req.id,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return;
+  }
+
+  // op === "prompt"
+  if (!lm) {
+    post({
+      source: SOURCE,
+      direction: "response",
+      id: req.id,
+      ok: false,
+      error:
+        "Chrome Prompt API is not available (window.LanguageModel is undefined). " +
+        "Use a Chrome version with the built-in AI / Prompt API enabled.",
+    });
+    return;
+  }
+  try {
+    console.debug("[webmcp-agent] LanguageModel.create() starting…");
+    const session = await lm.create({
+      monitor(m) {
+        m.addEventListener("downloadprogress", (e) => {
+          const ev = e as ProgressEvent;
+          console.debug(`[webmcp-agent] model download: ${Math.round((ev.loaded ?? 0) * 100)}%`);
+        });
+      },
+    });
+    console.debug("[webmcp-agent] session created; calling prompt()…");
+    try {
+      const text = await session.prompt(
+        req.prompt,
+        req.responseConstraint ? { responseConstraint: req.responseConstraint } : undefined,
+      );
+      console.debug("[webmcp-agent] prompt() resolved:", text);
+      post({ source: SOURCE, direction: "response", id: req.id, ok: true, text });
+    } finally {
+      session.destroy?.();
+    }
+  } catch (err) {
+    console.error("[webmcp-agent] Prompt API error:", err);
     post({
       source: SOURCE,
       direction: "response",

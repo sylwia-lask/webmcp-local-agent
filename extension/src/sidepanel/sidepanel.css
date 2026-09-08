@@ -71,6 +71,29 @@ button.link {
 }
 .hidden { display: none; }
 
+.provider-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.provider-row select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+.model-line { display: flex; align-items: center; gap: 8px; }
+.note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+#ollamaConfig { display: flex; flex-direction: column; gap: 8px; }
+
 .prompt { padding: 12px; border-bottom: 1px solid var(--border); }
 .prompt textarea {
   width: 100%;

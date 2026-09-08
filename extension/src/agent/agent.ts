@@ -17,15 +17,13 @@
  *     Execution happens only through document.modelContext.executeTool.
  */
 import type { AgentConfig } from "../config";
-import type { AgentEvent, WebMcpTool } from "./types";
-import {
-  chatJsonMode,
-  chatWithTools,
-  type OllamaMessage,
-} from "./ollama";
+import type { AgentEvent, JSONSchema, WebMcpTool } from "./types";
+import type { LlmMessage, LlmProvider } from "./llm";
 
 /** Callbacks the caller (service worker) provides to bridge to the page + UI. */
 export interface AgentDeps {
+  /** The selected LLM backend (Ollama or Chrome Prompt API). */
+  provider: LlmProvider;
   getTools: () => Promise<WebMcpTool[]>;
   executeTool: (toolName: string, argsJson: string) => Promise<string>;
   emit: (event: AgentEvent) => void;
@@ -65,6 +63,26 @@ function jsonSystemPrompt(tools: WebMcpTool[]): string {
     "Only use tools from this list. Never invent tools or arguments:",
     toolLines || "(no tools available)",
   ].join("\n");
+}
+
+/**
+ * JSON Schema for the decision object, used as `responseConstraint` by
+ * providers that support structured output (Chrome Prompt API). Ollama ignores
+ * it and relies on the prompt + format:"json". Either way the contract is the
+ * same: {type:"tool_call", tool, arguments} or {type:"final", message}.
+ */
+function decisionSchema(tools: WebMcpTool[]): JSONSchema {
+  const toolNames = tools.map((t) => t.name);
+  return {
+    type: "object",
+    properties: {
+      type: { type: "string", enum: ["tool_call", "final"] },
+      tool: toolNames.length ? { type: "string", enum: toolNames } : { type: "string" },
+      arguments: { type: "object" },
+      message: { type: "string" },
+    },
+    required: ["type"],
+  };
 }
 
 /* ---- Validation --------------------------------------------------------- */
@@ -111,10 +129,13 @@ export async function runAgent(
     });
   }
 
-  // Decide the initial strategy. "auto" tries native first.
-  let useJsonFallback = cfg.toolMode === "json";
+  // Decide the initial strategy. "auto"/"native" try native tool calling first;
+  // "json" forces the JSON protocol. Providers without native tool calling
+  // (e.g. Chrome Prompt API) start in JSON mode directly.
+  const providerSupportsNativeTools = deps.provider.supportsNativeTools !== false;
+  let useJsonFallback = cfg.toolMode === "json" || !providerSupportsNativeTools;
 
-  const messages: OllamaMessage[] = [
+  const messages: LlmMessage[] = [
     { role: "system", content: useJsonFallback ? jsonSystemPrompt(tools) : systemPrompt() },
     { role: "user", content: userPrompt },
   ];
@@ -127,14 +148,15 @@ export async function runAgent(
     });
 
     // 2. Ask the model.
-    let reply: OllamaMessage;
+    let reply: LlmMessage;
     try {
       reply = useJsonFallback
-        ? await chatJsonMode(cfg, messages)
-        : await chatWithTools(cfg, messages, tools);
+        ? await deps.provider.chatJson(messages, decisionSchema(tools))
+        : await deps.provider.chatWithTools(messages, tools);
     } catch (err) {
-      // In "auto" mode, a native failure downgrades to JSON and retries once.
-      if (cfg.toolMode === "auto" && !useJsonFallback) {
+      // In "auto" mode (or when the provider lacks native tools), a native
+      // failure downgrades to JSON and retries once.
+      if ((cfg.toolMode === "auto" || !providerSupportsNativeTools) && !useJsonFallback) {
         deps.emit({
           kind: "info",
           message: `Native tool calling failed (${err instanceof Error ? err.message : err}). Falling back to structured-JSON mode.`,
@@ -211,7 +233,7 @@ export async function runAgent(
         "You have reached the maximum number of tool steps. Do not call any more tools. " +
         "Reply with a short final message summarizing what was done and what remains, if anything.",
     });
-    const summary = await chatJsonMode(cfg, messages).catch(() => chatWithTools(cfg, messages, []));
+    const summary = await deps.provider.chatJson(messages);
     const text = summary.content?.trim();
     deps.emit({ kind: "final", message: text || "Reached the step limit before finishing the request." });
   } catch {

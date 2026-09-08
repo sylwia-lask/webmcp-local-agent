@@ -6,6 +6,13 @@
  * these defaults (see loadConfig).
  */
 export interface AgentConfig {
+  /**
+   * Which LLM backend to use:
+   *  - "ollama": local Ollama server (native tools + JSON fallback).
+   *  - "chrome": Chrome built-in Prompt API (LanguageModel / Gemini Nano),
+   *              JSON protocol only.
+   */
+  provider: "ollama" | "chrome";
   /** Base URL of the local Ollama server. */
   ollamaUrl: string;
   /** Model name as it appears in `ollama list`, e.g. "llama3.1" or "qwen2.5". */
@@ -23,6 +30,7 @@ export interface AgentConfig {
 }
 
 export const DEFAULT_CONFIG: AgentConfig = {
+  provider: "ollama",
   ollamaUrl: "http://localhost:11434",
   model: "llama3.1",
   toolMode: "auto",

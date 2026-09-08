@@ -16,8 +16,12 @@ const $ = <T extends HTMLElement>(id: string): T => {
 };
 
 const modelLabel = $("modelLabel");
+const modelLine = $("modelLine");
+const providerSelect = $<HTMLSelectElement>("provider");
 const toggleConfigBtn = $("toggleConfig");
 const configPanel = $("configPanel");
+const ollamaConfig = $("ollamaConfig");
+const chromeConfigNote = $("chromeConfigNote");
 const ollamaUrlInput = $<HTMLInputElement>("ollamaUrl");
 const modelInput = $<HTMLInputElement>("model");
 const toolModeSelect = $<HTMLSelectElement>("toolMode");
@@ -31,12 +35,31 @@ const logEl = $("log");
 /* ---- Config -------------------------------------------------------------- */
 async function refreshConfigUI(): Promise<void> {
   const cfg = await loadConfig();
-  modelLabel.textContent = cfg.model;
+  providerSelect.value = cfg.provider;
   ollamaUrlInput.value = cfg.ollamaUrl;
   modelInput.value = cfg.model;
   toolModeSelect.value = cfg.toolMode;
   maxStepsInput.value = String(cfg.maxSteps);
+  applyProviderUI(cfg.provider, cfg.model);
 }
+
+/** Show/hide provider-specific fields and update the header label. */
+function applyProviderUI(provider: AgentConfig["provider"], model: string): void {
+  const isChrome = provider === "chrome";
+  ollamaConfig.classList.toggle("hidden", isChrome);
+  chromeConfigNote.classList.toggle("hidden", !isChrome);
+  modelLine.classList.toggle("hidden", isChrome);
+  modelLabel.textContent = model;
+}
+
+// One-click provider switch: persist immediately, no need to open config.
+providerSelect.addEventListener("change", async () => {
+  const provider = providerSelect.value as AgentConfig["provider"];
+  await saveConfig({ provider });
+  const cfg = await loadConfig();
+  applyProviderUI(provider, cfg.model);
+  appendEntry({ kind: "info", message: `Provider switched to ${providerSelect.selectedOptions[0].text}.` });
+});
 
 toggleConfigBtn.addEventListener("click", () => configPanel.classList.toggle("hidden"));
 

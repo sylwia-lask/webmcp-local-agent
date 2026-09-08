@@ -48,9 +48,11 @@ window.addEventListener("message", (event: MessageEvent) => {
 
 type BridgeOp =
   | { op: "getTools" }
-  | { op: "executeTool"; toolName: string; argsJson: string };
+  | { op: "executeTool"; toolName: string; argsJson: string }
+  | { op: "promptAvailability" }
+  | { op: "prompt"; prompt: string; responseConstraint?: Record<string, unknown> };
 
-function callBridge(req: BridgeOp): Promise<BridgeResponse> {
+function callBridge(req: BridgeOp, timeoutMs = 15_000): Promise<BridgeResponse> {
   const id = `req-${Date.now()}-${counter++}`;
   const full = { source: SOURCE, direction: "request", id, ...req } as BridgeRequest;
   return new Promise<BridgeResponse>((resolve) => {
@@ -62,10 +64,10 @@ function callBridge(req: BridgeOp): Promise<BridgeResponse> {
           direction: "response",
           id,
           ok: false,
-          error: "Timed out waiting for the WebMCP page bridge (15s).",
+          error: `Timed out waiting for the page bridge (${Math.round(timeoutMs / 1000)}s).`,
         });
       }
-    }, 15_000);
+    }, timeoutMs);
 
     pending.set(id, (res) => {
       clearTimeout(timeout);
@@ -92,6 +94,21 @@ chrome.runtime.onMessage.addListener(
           argsJson: msg.argsJson,
         });
         sendResponse(res.ok ? { ok: true, result: res.result ?? "" } : { ok: false, error: res.error });
+        return;
+      }
+      if (msg.type === "PROMPT_AVAILABILITY") {
+        const res = await callBridge({ op: "promptAvailability" });
+        sendResponse(res.ok ? { ok: true, availability: res.availability } : { ok: false, error: res.error });
+        return;
+      }
+      if (msg.type === "PROMPT_RUN") {
+        // Prompt API can be slow on first use (model load / download), so give
+        // it a generous timeout.
+        const res = await callBridge(
+          { op: "prompt", prompt: msg.prompt, responseConstraint: msg.responseConstraint },
+          180_000,
+        );
+        sendResponse(res.ok ? { ok: true, text: res.text ?? "" } : { ok: false, error: res.error });
         return;
       }
     })();
