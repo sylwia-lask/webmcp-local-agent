@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WebMCP Demo — Employees</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+      h1 { font-size: 20px; }
+      .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-top: 16px; }
+      ul { padding-left: 20px; }
+      code { background: #f2f2f2; padding: 1px 4px; border-radius: 3px; }
+      #status { color: #555; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <h1>WebMCP Demo — Employee Directory</h1>
+    <p id="status">Checking WebMCP support…</p>
+
+    <div class="card">
+      <h2>Employees</h2>
+      <ul id="list"><li><em>none yet</em></li></ul>
+    </div>
+
+    <p>
+      This page registers two WebMCP tools: <code>createEmployee</code> and
+      <code>listEmployees</code>. Open the extension side panel and try:
+      <em>"Add a new employee named John Smith"</em>.
+    </p>
+
+    <script>
+      // Simple in-page state.
+      const employees = [];
+
+      function render() {
+        const list = document.getElementById("list");
+        list.innerHTML =
+          employees.length === 0
+            ? "<li><em>none yet</em></li>"
+            : employees.map((e) => `<li>${e.name}${e.role ? " — " + e.role : ""}</li>`).join("");
+      }
+
+      async function registerTools() {
+        const status = document.getElementById("status");
+        if (!document.modelContext || !document.modelContext.registerTool) {
+          status.textContent =
+            "document.modelContext is not available. Enable the WebMCP flag in chrome://flags and reload.";
+          status.style.color = "#b00";
+          return;
+        }
+
+        await document.modelContext.registerTool({
+          name: "createEmployee",
+          description: "Create a new employee record with a name and optional role.",
+          inputSchema: {
+            type: "object",
+            properties: {
+              name: { type: "string", description: "Full name of the employee" },
+              role: { type: "string", description: "Optional job title" },
+            },
+            required: ["name"],
+          },
+          annotations: { readOnlyHint: false, consequentialHint: false },
+          execute: async ({ name, role }) => {
+            employees.push({ name, role: role || "" });
+            render();
+            return `Created employee "${name}"${role ? " (" + role + ")" : ""}.`;
+          },
+        });
+
+        await document.modelContext.registerTool({
+          name: "listEmployees",
+          description: "Return the current list of employees.",
+          inputSchema: { type: "object", properties: {} },
+          annotations: { readOnlyHint: true },
+          execute: async () => {
+            if (employees.length === 0) return "There are no employees yet.";
+            return employees.map((e) => (e.role ? `${e.name} (${e.role})` : e.name)).join(", ");
+          },
+        });
+
+        status.textContent = "WebMCP tools registered: createEmployee, listEmployees.";
+        status.style.color = "#080";
+      }
+
+      render();
+      registerTools();
+    </script>
+  </body>
+</html>

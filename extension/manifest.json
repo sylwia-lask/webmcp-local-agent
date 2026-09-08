@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "WebMCP Local Agent",
+  "version": "0.1.0",
+  "description": "Local AI agent that drives WebMCP tools on the current tab using a local Ollama model.",
+  "minimum_chrome_version": "123",
+  "permissions": ["sidePanel", "tabs", "scripting", "storage", "activeTab"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "action": {
+    "default_title": "Open WebMCP Local Agent"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content-script.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["content/page-bridge.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

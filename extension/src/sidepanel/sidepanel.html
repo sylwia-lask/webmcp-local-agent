@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WebMCP Local Agent</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header>
+      <h1>WebMCP Local Agent</h1>
+      <div class="model-line">
+        Model: <span id="modelLabel">…</span>
+        <button id="toggleConfig" class="link" type="button">config</button>
+      </div>
+    </header>
+
+    <section id="configPanel" class="config hidden">
+      <label>
+        Ollama URL
+        <input id="ollamaUrl" type="text" placeholder="http://localhost:11434" />
+      </label>
+      <label>
+        Model name
+        <input id="model" type="text" placeholder="llama3.1" />
+      </label>
+      <label>
+        Tool mode
+        <select id="toolMode">
+          <option value="auto">auto (native, fallback to JSON)</option>
+          <option value="native">native tool calling</option>
+          <option value="json">structured JSON</option>
+        </select>
+      </label>
+      <label>
+        Max steps
+        <input id="maxSteps" type="number" min="1" max="20" />
+      </label>
+      <button id="saveConfig" type="button">Save config</button>
+    </section>
+
+    <section class="prompt">
+      <textarea id="prompt" rows="3" placeholder="e.g. Add a new employee named John Smith"></textarea>
+      <div class="row">
+        <button id="run" type="button">Run</button>
+        <button id="clear" class="secondary" type="button">Clear log</button>
+      </div>
+    </section>
+
+    <section class="log" id="log" aria-live="polite"></section>
+
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

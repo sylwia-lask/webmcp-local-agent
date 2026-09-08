@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Build output (regenerated with `npm run build`)
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary / scratch files
+_*.json
+*.tmp
+.cache/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+.env.*
