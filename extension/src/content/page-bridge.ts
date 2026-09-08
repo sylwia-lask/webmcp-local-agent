@@ -179,7 +179,8 @@ async function handlePrompt(req: PromptRequest): Promise<void> {
     return;
   }
   try {
-    console.debug("[webmcp-agent] LanguageModel.create() starting…");
+    // First use can trigger an on-device model download; the monitor surfaces
+    // progress instead of appearing to hang.
     const session = await lm.create({
       monitor(m) {
         m.addEventListener("downloadprogress", (e) => {
@@ -188,19 +189,16 @@ async function handlePrompt(req: PromptRequest): Promise<void> {
         });
       },
     });
-    console.debug("[webmcp-agent] session created; calling prompt()…");
     try {
       const text = await session.prompt(
         req.prompt,
         req.responseConstraint ? { responseConstraint: req.responseConstraint } : undefined,
       );
-      console.debug("[webmcp-agent] prompt() resolved:", text);
       post({ source: SOURCE, direction: "response", id: req.id, ok: true, text });
     } finally {
       session.destroy?.();
     }
   } catch (err) {
-    console.error("[webmcp-agent] Prompt API error:", err);
     post({
       source: SOURCE,
       direction: "response",
