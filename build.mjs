@@ -21,9 +21,10 @@ await build({
   logLevel: "info",
 });
 
-// Copy static assets (manifest + html/css) into dist.
+// Copy static assets (manifest + html/css + icons) into dist.
 cpSync("extension/manifest.json", `${outdir}/manifest.json`);
 cpSync("extension/src/sidepanel/sidepanel.html", `${outdir}/sidepanel/sidepanel.html`);
 cpSync("extension/src/sidepanel/sidepanel.css", `${outdir}/sidepanel/sidepanel.css`);
+cpSync("extension/src/icons", `${outdir}/icons`, { recursive: true });
 
 console.log("\nBuild complete -> ./dist  (Load unpacked in chrome://extensions)");
