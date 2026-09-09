@@ -103,10 +103,32 @@ chrome.runtime.onConnect.addListener((port) => {
   };
 
   port.onMessage.addListener((msg: PanelToWorkerMessage) => {
-    if (msg.type !== "RUN_AGENT") return;
-    void handleRun(msg.tabId, msg.prompt, emit);
+    if (msg.type === "RUN_AGENT") {
+      void handleRun(msg.tabId, msg.prompt, emit);
+    } else if (msg.type === "LIST_TOOLS") {
+      void handleListTools(msg.tabId, emit);
+    }
   });
 });
+
+/**
+ * Out-of-band tool discovery for the "Tools" tab. Never throws to the caller;
+ * failures (no WebMCP on the page, unreachable content script) are reported as
+ * `available: false` so the panel can show "unavailable".
+ */
+async function handleListTools(tabId: number, emit: (e: AgentEvent) => void): Promise<void> {
+  try {
+    const tools = await getToolsFromTab(tabId);
+    emit({ kind: "tools_list", available: true, tools });
+  } catch (err) {
+    emit({
+      kind: "tools_list",
+      available: false,
+      tools: [],
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
 
 async function handleRun(
   tabId: number,

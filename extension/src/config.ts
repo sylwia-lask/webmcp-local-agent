@@ -41,7 +41,7 @@ export interface AgentConfig {
 }
 
 export const DEFAULT_CONFIG: AgentConfig = {
-  provider: "ollama",
+  provider: "chrome",
   ollamaUrl: "http://localhost:11434",
   model: "llama3.1",
   apiKey: "",

@@ -34,6 +34,7 @@ export interface WebMcpTool {
 
 export type PanelToWorkerMessage =
   | { type: "RUN_AGENT"; tabId: number; prompt: string }
+  | { type: "LIST_TOOLS"; tabId: number }
   | { type: "CANCEL_AGENT" };
 
 /** A single event emitted while the agent runs, streamed to the panel log. */
@@ -45,7 +46,13 @@ export type AgentEvent =
   | { kind: "tool_result"; step: number; tool: string; result: string }
   | { kind: "final"; message: string }
   | { kind: "error"; message: string }
-  | { kind: "info"; message: string };
+  | { kind: "info"; message: string }
+  /**
+   * Result of an out-of-band tool listing (LIST_TOOLS), used to populate the
+   * "Tools" tab. `available` is false when the page has no WebMCP support or
+   * the content script could not be reached.
+   */
+  | { kind: "tools_list"; available: boolean; tools: WebMcpTool[]; error?: string };
 
 /* ------------------------------------------------------------------ */
 /* Messaging: content script <-> page bridge (MAIN world)              */

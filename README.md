@@ -7,8 +7,8 @@ command in natural language into a side panel, e.g.:
 
 You can pick the LLM backend with one click:
 
+- **Chrome Prompt API** — built-in on-device Gemini Nano (JSON mode). Default.
 - **Ollama** — local server (native tools + JSON fallback).
-- **Chrome Prompt API** — built-in on-device Gemini Nano (JSON mode).
 - **Gemini (cloud)** — Google Gemini via API key (native function calling).
 
 The rest of the flow — tool discovery, prompt building, tool selection,
@@ -175,7 +175,7 @@ The default model lives in `extension/src/config.ts`:
 
 ```ts
 export const DEFAULT_CONFIG: AgentConfig = {
-  provider: "ollama",         // "ollama" | "chrome" | "gemini"
+  provider: "chrome",         // "chrome" | "ollama" | "gemini"  (default: chrome)
   ollamaUrl: "http://localhost:11434",
   model: "llama3.1",         // <-- Ollama model
   apiKey: "",                 // Gemini key — set in the UI, never commit
@@ -269,10 +269,10 @@ call the model chose + arguments → the tool result → the final answer.
 
 At the top of the panel, use the **Provider** dropdown:
 
-- **Ollama** — needs `ollama serve` running and a pulled model (steps 2-4).
-- **Chrome Prompt API** — needs a Chrome build where
+- **Chrome Prompt API** (default) — needs a Chrome build where
   `await LanguageModel.availability()` returns `"available"`. No Ollama, no URL,
   no model name. Runs entirely on-device.
+- **Ollama** — needs `ollama serve` running and a pulled model (steps 2-4).
 - **Gemini (cloud)** — open **config**, paste a Gemini API key (from
   [Google AI Studio](https://aistudio.google.com/apikey)), optionally set the
   model (default `gemini-3.8-flash`), and **Save config**. The key is stored in
@@ -303,12 +303,12 @@ interface LlmProvider {
 }
 ```
 
-- **`OllamaProvider`** (`agent/providers/ollama-provider.ts`) — talks to the
-  local Ollama `/api/chat`. Supports native tool calling and JSON mode.
 - **`ChromePromptApiProvider`** (`agent/providers/chrome-prompt-provider.ts`) —
   uses Chrome's built-in `LanguageModel` (Gemini Nano). No native tool calling,
   so it always runs the JSON protocol, with `responseConstraint` (JSON Schema)
-  for structured output.
+  for structured output. This is the default provider.
+- **`OllamaProvider`** (`agent/providers/ollama-provider.ts`) — talks to the
+  local Ollama `/api/chat`. Supports native tool calling and JSON mode.
 - **`GeminiApiProvider`** (`agent/providers/gemini-provider.ts`) — calls the
   Gemini REST `generateContent` endpoint with an API key. Native function
   calling. Defaults to `gemini-3.8-flash` and **falls back** through older Flash

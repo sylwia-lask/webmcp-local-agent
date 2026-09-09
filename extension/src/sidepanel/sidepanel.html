@@ -13,20 +13,31 @@
         <label class="provider-row">
           Provider:
           <select id="provider">
-            <option value="ollama">Ollama</option>
             <option value="chrome">Chrome Prompt API</option>
+            <option value="ollama">Ollama</option>
             <option value="gemini">Gemini (cloud)</option>
           </select>
         </label>
-        <button id="toggleConfig" class="link" type="button">config</button>
-      </div>
-      <div class="model-line" id="modelLine">
-        Model: <span id="modelLabel">…</span>
+        <div class="tabs">
+          <button id="toggleTools" class="link tab" type="button">
+            tools <span id="toolsBadge" class="badge">–</span>
+          </button>
+          <button id="toggleConfig" class="link tab" type="button">config</button>
+        </div>
       </div>
     </header>
 
+    <section id="toolsPanel" class="tools-panel hidden">
+      <div class="tools-header">
+        <span class="tools-title">WebMCP tools</span>
+        <button id="refreshTools" class="link" type="button">refresh</button>
+      </div>
+      <div id="toolsList" class="tools-list"></div>
+    </section>
+
     <section id="configPanel" class="config hidden">
-      <div id="ollamaConfig">
+      <fieldset id="ollamaConfig" class="config-group">
+        <legend>Ollama</legend>
         <label>
           Ollama URL
           <input id="ollamaUrl" type="text" placeholder="http://localhost:11434" />
@@ -43,12 +54,18 @@
             <option value="json">structured JSON</option>
           </select>
         </label>
-      </div>
-      <p id="chromeConfigNote" class="note hidden">
-        Chrome Prompt API uses the built-in on-device model (Gemini Nano) in
-        structured-JSON mode. No URL or model name needed.
-      </p>
-      <div id="geminiConfig" class="hidden">
+      </fieldset>
+
+      <fieldset id="chromeConfig" class="config-group hidden">
+        <legend>Chrome Prompt API</legend>
+        <p id="chromeConfigNote" class="note">
+          Uses the built-in on-device model (Gemini Nano) in structured-JSON
+          mode. No URL or model name needed.
+        </p>
+      </fieldset>
+
+      <fieldset id="geminiConfig" class="config-group hidden">
+        <legend>Gemini (cloud)</legend>
         <label>
           Gemini API key
           <input id="apiKey" type="password" placeholder="AIza… (stored locally, never committed)" autocomplete="off" />
@@ -62,11 +79,16 @@
           sent to Google. Falls back to older Flash models if the chosen one
           isn't available.
         </p>
-      </div>
-      <label>
-        Max steps
-        <input id="maxSteps" type="number" min="1" max="20" />
-      </label>
+      </fieldset>
+
+      <fieldset class="config-group">
+        <legend>General</legend>
+        <label>
+          Max steps
+          <input id="maxSteps" type="number" min="1" max="20" />
+        </label>
+      </fieldset>
+
       <button id="saveConfig" type="button">Save config</button>
     </section>
 
