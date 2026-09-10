@@ -23,9 +23,12 @@
     </div>
 
     <p>
-      This page registers two WebMCP tools: <code>createEmployee</code> and
-      <code>listEmployees</code>. Open the extension side panel and try:
-      <em>"Add a new employee named John Smith"</em>.
+      This page registers three WebMCP tools: <code>createEmployee</code>,
+      <code>listEmployees</code>, and <code>deleteAllEmployees</code>. Open the
+      extension side panel and try: <em>"Add a new employee named John Smith"</em>.
+      To see the confirmation prompt, try <em>"Delete all employees"</em> —
+      <code>deleteAllEmployees</code> is marked <code>consequentialHint: true</code>,
+      so the agent will ask before running it.
     </p>
 
     <script>
@@ -79,7 +82,23 @@
           },
         });
 
-        status.textContent = "WebMCP tools registered: createEmployee, listEmployees.";
+        // A consequential (non-reversible) tool: deletes the whole directory.
+        // consequentialHint:true means the agent must ask the user before running it.
+        await document.modelContext.registerTool({
+          name: "deleteAllEmployees",
+          description: "Permanently delete every employee record. This cannot be undone.",
+          inputSchema: { type: "object", properties: {} },
+          annotations: { readOnlyHint: false, consequentialHint: true },
+          execute: async () => {
+            const count = employees.length;
+            employees.length = 0;
+            render();
+            return `Deleted ${count} employee record${count === 1 ? "" : "s"}.`;
+          },
+        });
+
+        status.textContent =
+          "WebMCP tools registered: createEmployee, listEmployees, deleteAllEmployees.";
         status.style.color = "#080";
       }
 

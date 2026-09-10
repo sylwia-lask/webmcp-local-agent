@@ -35,7 +35,12 @@ export interface WebMcpTool {
 export type PanelToWorkerMessage =
   | { type: "RUN_AGENT"; tabId: number; prompt: string }
   | { type: "LIST_TOOLS"; tabId: number }
-  | { type: "CANCEL_AGENT" };
+  | { type: "CANCEL_AGENT" }
+  /**
+   * The user's answer to a `confirm_tool` request. `id` matches the request's
+   * id; `approved` is true to allow the consequential tool call, false to skip.
+   */
+  | { type: "CONFIRM_TOOL"; id: string; approved: boolean };
 
 /** A single event emitted while the agent runs, streamed to the panel log. */
 export type AgentEvent =
@@ -44,6 +49,13 @@ export type AgentEvent =
   | { kind: "model_request"; step: number; note: string }
   | { kind: "tool_call"; step: number; tool: string; args: unknown }
   | { kind: "tool_result"; step: number; tool: string; result: string }
+  /**
+   * The agent is about to call a tool flagged with `consequentialHint` (a
+   * high-stakes or non-reversible action). The panel must show a prompt and
+   * reply with a CONFIRM_TOOL message carrying the same `id`. The agent loop
+   * blocks until it receives that reply.
+   */
+  | { kind: "confirm_tool"; id: string; step: number; tool: string; title?: string; description?: string; args: unknown }
   | { kind: "final"; message: string }
   | { kind: "error"; message: string }
   | { kind: "info"; message: string }

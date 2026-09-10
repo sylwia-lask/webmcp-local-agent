@@ -7,6 +7,7 @@
  */
 import { loadConfig, saveConfig, type AgentConfig } from "../config";
 import type { AgentEvent, PanelToWorkerMessage, WebMcpTool } from "../agent/types";
+import { Dropdown } from "./dropdown";
 
 /* ---- Element helpers ---------------------------------------------------- */
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -15,7 +16,16 @@ const $ = <T extends HTMLElement>(id: string): T => {
   return el as T;
 };
 
-const providerSelect = $<HTMLSelectElement>("provider");
+// Custom dropdowns replace native <select>, which can fail to open its option
+// popup inside Chrome's side panel on some Chrome versions (crbug 534387029).
+const providerSelect = new Dropdown(
+  [
+    { value: "chrome", label: "Chrome Prompt API" },
+    { value: "ollama", label: "Ollama" },
+    { value: "gemini", label: "Gemini (cloud)" },
+  ],
+);
+$("providerMount").appendChild(providerSelect.el);
 const toggleConfigBtn = $("toggleConfig");
 const toggleToolsBtn = $("toggleTools");
 const toolsBadge = $("toolsBadge");
@@ -30,7 +40,14 @@ const ollamaUrlInput = $<HTMLInputElement>("ollamaUrl");
 const modelInput = $<HTMLInputElement>("model");
 const apiKeyInput = $<HTMLInputElement>("apiKey");
 const geminiModelInput = $<HTMLInputElement>("geminiModel");
-const toolModeSelect = $<HTMLSelectElement>("toolMode");
+const toolModeSelect = new Dropdown(
+  [
+    { value: "auto", label: "auto (native, fallback to JSON)" },
+    { value: "native", label: "native tool calling" },
+    { value: "json", label: "structured JSON" },
+  ],
+);
+$("toolModeMount").appendChild(toolModeSelect.el);
 const maxStepsInput = $<HTMLInputElement>("maxSteps");
 const saveConfigBtn = $("saveConfig");
 const promptInput = $<HTMLTextAreaElement>("prompt");
@@ -62,12 +79,12 @@ function applyProviderUI(cfg: AgentConfig): void {
 }
 
 // One-click provider switch: persist immediately, no need to open config.
-providerSelect.addEventListener("change", async () => {
+providerSelect.el.addEventListener("change", async () => {
   const provider = providerSelect.value as AgentConfig["provider"];
   await saveConfig({ provider });
   const cfg = await loadConfig();
   applyProviderUI(cfg);
-  appendEntry({ kind: "info", message: `Provider switched to ${providerSelect.selectedOptions[0].text}.` });
+  appendEntry({ kind: "info", message: `Provider switched to ${providerSelect.selectedText}.` });
 });
 
 toggleConfigBtn.addEventListener("click", () => {
@@ -166,7 +183,68 @@ function appendEntry(event: AgentEvent): void {
     case "info":
       withBody(makeEntry("info", "Info"), event.message);
       break;
+    case "confirm_tool":
+      renderConfirmPrompt(event);
+      break;
   }
+}
+
+/**
+ * Render an inline confirmation prompt for a consequential tool call. The
+ * agent loop is blocked until the user clicks Approve or Decline, at which
+ * point we post a CONFIRM_TOOL message back to the worker.
+ */
+function renderConfirmPrompt(event: Extract<AgentEvent, { kind: "confirm_tool" }>): void {
+  const entry = makeEntry("confirm_tool", `Step ${event.step} · confirm ${event.title || event.tool}`);
+
+  const warn = document.createElement("div");
+  warn.className = "body";
+  warn.textContent =
+    "This tool is marked as consequential (a high-stakes or non-reversible action). " +
+    "Allow the agent to run it?";
+  entry.appendChild(warn);
+
+  if (event.description) {
+    const desc = document.createElement("div");
+    desc.className = "confirm-desc";
+    desc.textContent = event.description;
+    entry.appendChild(desc);
+  }
+
+  const args = document.createElement("pre");
+  args.textContent = formatArgs(event.args);
+  entry.appendChild(args);
+
+  const actions = document.createElement("div");
+  actions.className = "confirm-actions";
+
+  const approveBtn = document.createElement("button");
+  approveBtn.className = "confirm-approve";
+  approveBtn.textContent = "Approve";
+
+  const declineBtn = document.createElement("button");
+  declineBtn.className = "confirm-decline";
+  declineBtn.textContent = "Decline";
+
+  const respond = (approved: boolean): void => {
+    approveBtn.disabled = true;
+    declineBtn.disabled = true;
+    const decisionEl = document.createElement("div");
+    decisionEl.className = "confirm-decision";
+    decisionEl.textContent = approved ? "Approved." : "Declined.";
+    entry.appendChild(decisionEl);
+    const msg: PanelToWorkerMessage = { type: "CONFIRM_TOOL", id: event.id, approved };
+    ensurePort().postMessage(msg);
+  };
+
+  approveBtn.addEventListener("click", () => respond(true));
+  declineBtn.addEventListener("click", () => respond(false));
+
+  actions.appendChild(approveBtn);
+  actions.appendChild(declineBtn);
+  entry.appendChild(actions);
+
+  logEl.scrollTop = logEl.scrollHeight;
 }
 
 clearBtn.addEventListener("click", () => {
@@ -241,6 +319,19 @@ function renderToolsTab(available: boolean, tools: WebMcpTool[], error?: string)
     desc.className = "tool-desc";
     desc.textContent = tool.description || "(no description)";
     item.appendChild(desc);
+
+    // Surface risk annotations so it's obvious which tools will trigger a
+    // confirmation prompt (consequentialHint) before the agent runs them.
+    const hints: string[] = [];
+    if (tool.annotations?.consequentialHint === true) hints.push("⚠ consequential (asks before running)");
+    if (tool.annotations?.readOnlyHint === true) hints.push("read-only");
+    if (tool.annotations?.untrustedContentHint === true) hints.push("untrusted content");
+    if (hints.length) {
+      const ann = document.createElement("div");
+      ann.className = "tool-annotations";
+      ann.textContent = hints.join(" · ");
+      item.appendChild(ann);
+    }
 
     toolsList.appendChild(item);
   }

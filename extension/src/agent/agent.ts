@@ -26,6 +26,12 @@ export interface AgentDeps {
   provider: LlmProvider;
   getTools: () => Promise<WebMcpTool[]>;
   executeTool: (toolName: string, argsJson: string) => Promise<string>;
+  /**
+   * Ask the user to confirm a consequential tool call. Resolves true if the
+   * user approves, false if they decline. Only invoked for tools whose
+   * `annotations.consequentialHint` is true.
+   */
+  confirmConsequential: (tool: WebMcpTool, args: unknown, step: number) => Promise<boolean>;
   emit: (event: AgentEvent) => void;
 }
 
@@ -263,6 +269,19 @@ async function executeValidated(
   if (!parsed.ok) {
     deps.emit({ kind: "error", message: `${parsed.error} (tool: ${toolName})` });
     return parsed.error;
+  }
+
+  // Security check 3: consequential tools require explicit user confirmation.
+  // Per the WebMCP secure-tools guidance, a tool with consequentialHint:true
+  // performs a high-stakes or non-reversible action (e.g. transferring money,
+  // booking travel), so the agent must ask the user before executing it.
+  if (tool.annotations?.consequentialHint === true) {
+    const approved = await deps.confirmConsequential(tool, parsed.value, step);
+    if (!approved) {
+      const msg = `The user declined to run the consequential tool "${toolName}". It was not executed.`;
+      deps.emit({ kind: "info", message: msg });
+      return msg;
+    }
   }
 
   deps.emit({ kind: "tool_call", step, tool: toolName, args: parsed.value });

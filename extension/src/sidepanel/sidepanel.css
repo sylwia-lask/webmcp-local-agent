@@ -252,3 +252,70 @@ button.link {
 .entry.error { border-left-color: var(--err); background: #fdecea; }
 .entry.error .body { color: var(--err); font-weight: 600; }
 .entry.info { border-left-color: var(--muted); opacity: 0.9; }
+
+/* Consequential-tool confirmation prompt */
+.entry.confirm_tool { border-left-color: #ef6c00; background: #fff4e5; }
+.entry.confirm_tool .body { color: #7a3d00; font-weight: 700; font-family: inherit; font-size: 17px; }
+.confirm-desc { color: var(--text); font-size: 15px; margin-top: 6px; font-style: italic; }
+.confirm-actions { display: flex; gap: 12px; margin-top: 12px; }
+.confirm-approve { background: var(--err); }
+.confirm-approve:hover { background: #d32f2f; }
+.confirm-decline { background: #ffffff; color: var(--accent-ink); border: 2px solid var(--accent); }
+.confirm-decline:hover { background: var(--panel); }
+.confirm-decision { margin-top: 10px; font-weight: 800; color: var(--accent-ink); }
+
+.tool-annotations { margin-top: 6px; font-size: 13px; font-weight: 700; color: #ef6c00; }
+
+/* Custom dropdown (native <select> replacement for Chrome side panel) */
+.dropdown { position: relative; display: inline-block; min-width: 180px; }
+.dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  background: #ffffff;
+  color: var(--text);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.dropdown-trigger:hover { background: var(--panel); }
+.dropdown-trigger:focus-visible { outline: 3px solid var(--accent-ink); outline-offset: 2px; }
+.dropdown-trigger[aria-expanded="true"] { border-color: var(--accent); }
+.dropdown-caret { color: var(--accent-ink); font-size: 13px; line-height: 1; pointer-events: none; }
+.dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  /* Shown only when not .hidden. Using :not(.hidden) keeps the global
+     `.hidden { display: none }` rule from being overridden by this block. */
+  display: none;
+  flex-direction: column;
+  background: #ffffff;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+.dropdown-list:not(.hidden) { display: flex; }
+.dropdown-option {
+  background: #ffffff;
+  color: var(--text);
+  border: none;
+  border-radius: 0;
+  padding: 10px 12px;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.dropdown-option:hover { background: var(--panel); }
+.dropdown-option.selected { background: #e3f7f4; color: var(--accent-ink); }
+.dropdown-option:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }

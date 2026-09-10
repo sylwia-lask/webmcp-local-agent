@@ -22,6 +22,17 @@ import type {
   WorkerToContentMessage,
 } from "../agent/types";
 
+/**
+ * Pending consequential-tool confirmations, keyed by request id. The agent
+ * loop registers a resolver here and emits a `confirm_tool` event; the panel
+ * later replies with a CONFIRM_TOOL message which resolves the promise.
+ */
+const pendingConfirmations = new Map<string, (approved: boolean) => void>();
+
+function newConfirmationId(): string {
+  return `confirm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 // Open the side panel from the toolbar action.
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {
@@ -107,7 +118,20 @@ chrome.runtime.onConnect.addListener((port) => {
       void handleRun(msg.tabId, msg.prompt, emit);
     } else if (msg.type === "LIST_TOOLS") {
       void handleListTools(msg.tabId, emit);
+    } else if (msg.type === "CONFIRM_TOOL") {
+      const resolve = pendingConfirmations.get(msg.id);
+      if (resolve) {
+        pendingConfirmations.delete(msg.id);
+        resolve(msg.approved);
+      }
     }
+  });
+
+  // If the panel disconnects while a confirmation is pending, treat it as a
+  // denial so the agent loop never hangs forever.
+  port.onDisconnect.addListener(() => {
+    for (const [, resolve] of pendingConfirmations) resolve(false);
+    pendingConfirmations.clear();
   });
 });
 
@@ -170,6 +194,20 @@ async function handleRun(
       provider,
       getTools: () => getToolsFromTab(tabId),
       executeTool: (name, argsJson) => executeToolInTab(tabId, name, argsJson),
+      confirmConsequential: (tool, args, step) =>
+        new Promise<boolean>((resolve) => {
+          const id = newConfirmationId();
+          pendingConfirmations.set(id, resolve);
+          emit({
+            kind: "confirm_tool",
+            id,
+            step,
+            tool: tool.name,
+            title: tool.title,
+            description: tool.description,
+            args,
+          });
+        }),
       emit,
     });
   } catch (err) {

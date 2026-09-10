@@ -12,11 +12,7 @@
       <div class="model-line">
         <label class="provider-row">
           Provider:
-          <select id="provider">
-            <option value="chrome">Chrome Prompt API</option>
-            <option value="ollama">Ollama</option>
-            <option value="gemini">Gemini (cloud)</option>
-          </select>
+          <span id="providerMount"></span>
         </label>
         <div class="tabs">
           <button id="toggleTools" class="link tab" type="button">
@@ -48,11 +44,7 @@
         </label>
         <label>
           Tool mode
-          <select id="toolMode">
-            <option value="auto">auto (native, fallback to JSON)</option>
-            <option value="native">native tool calling</option>
-            <option value="json">structured JSON</option>
-          </select>
+          <span id="toolModeMount"></span>
         </label>
       </fieldset>
 
