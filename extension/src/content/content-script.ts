@@ -18,18 +18,13 @@ import type {
 
 const SOURCE = "webmcp-agent";
 
-/* -- 1. Inject the MAIN-world bridge exactly once -------------------------- */
-function injectBridge(): void {
-  const url = chrome.runtime.getURL("content/page-bridge.js");
-  const script = document.createElement("script");
-  script.type = "module";
-  script.src = url;
-  script.dataset.webmcpAgent = "bridge";
-  (document.head || document.documentElement).appendChild(script);
-  // Keep the tag; removing it does not unload the module, and leaving it is
-  // harmless. This keeps behavior predictable across SPA re-renders.
-}
-injectBridge();
+/* -- 1. The MAIN-world bridge (page-bridge.js) is injected declaratively via
+ *      the manifest with "world": "MAIN". We no longer append a <script> tag
+ *      ourselves: doing so is subject to the PAGE's Content Security Policy,
+ *      which blocks the injected script on strict-CSP sites (e.g. GitHub
+ *      Pages) and surfaces an error in the extension's Errors panel. Scripts
+ *      injected by the browser via the manifest are not subject to page CSP.
+ */
 
 /* -- 2. Promise-based request/response over window.postMessage ------------- */
 let counter = 0;

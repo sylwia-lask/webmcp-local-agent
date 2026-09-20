@@ -5,20 +5,36 @@ import { cpSync, mkdirSync } from "node:fs";
 const outdir = "dist";
 mkdirSync(outdir, { recursive: true });
 
-// Bundle each entry point. All are plain ESM/IIFE bundles with no runtime deps.
-await build({
-  entryPoints: {
-    "background/service-worker": "extension/src/background/service-worker.ts",
-    "content/content-script": "extension/src/content/content-script.ts",
-    "content/page-bridge": "extension/src/content/page-bridge.ts",
-    "sidepanel/sidepanel": "extension/src/sidepanel/sidepanel.ts",
-  },
+const common = {
   outdir,
   bundle: true,
-  format: "esm",
   target: "chrome123",
   sourcemap: true,
   logLevel: "info",
+};
+
+// ESM bundles: the service worker (type: module) and the side panel (loaded as
+// <script type="module">).
+await build({
+  ...common,
+  entryPoints: {
+    "background/service-worker": "extension/src/background/service-worker.ts",
+    "sidepanel/sidepanel": "extension/src/sidepanel/sidepanel.ts",
+  },
+  format: "esm",
+});
+
+// Content scripts are injected by the browser as CLASSIC scripts (not modules),
+// so they must be IIFE bundles. This applies to both the ISOLATED-world content
+// script and the MAIN-world page bridge (now injected declaratively via the
+// manifest's "world": "MAIN", rather than by appending a <script> tag).
+await build({
+  ...common,
+  entryPoints: {
+    "content/content-script": "extension/src/content/content-script.ts",
+    "content/page-bridge": "extension/src/content/page-bridge.ts",
+  },
+  format: "iife",
 });
 
 // Copy static assets (manifest + html/css + icons) into dist.

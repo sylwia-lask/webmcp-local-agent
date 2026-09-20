@@ -16,9 +16,12 @@ const SOURCE = "webmcp-agent";
 
 interface ModelContextLike {
   getTools: (opts?: { fromOrigins?: string[] }) => Promise<RawTool[]>;
+  // The argument shape differs between Chrome channels: newer builds (spec-
+  // compliant) take a JS object, older/stable builds take a JSON string. We
+  // accept both here and pick the right one at call time.
   executeTool: (
     tool: RawTool,
-    argsJson: string,
+    args: Record<string, unknown> | string,
     opts?: { signal?: AbortSignal },
   ) => Promise<unknown>;
 }
@@ -35,6 +38,34 @@ interface RawTool {
 function getModelContext(): ModelContextLike | null {
   const mc = (document as unknown as { modelContext?: ModelContextLike }).modelContext;
   return mc ?? null;
+}
+
+/**
+ * Call executeTool() in a way that works across Chrome channels.
+ *
+ * Newer/Beta builds follow the current spec and expect a JS object for the
+ * arguments. Older/stable builds expect a JSON string and throw
+ * "Failed to parse input arguments" (an UnknownError/TypeError) when handed an
+ * object. We try the object form first, and only fall back to the string form
+ * when the failure looks like an argument-shape mismatch — never for genuine
+ * tool errors, which must surface to the caller unchanged.
+ */
+async function executeWithArgCompat(
+  mc: ModelContextLike,
+  tool: RawTool,
+  argsObject: Record<string, unknown>,
+  argsString: string,
+): Promise<unknown> {
+  try {
+    return await mc.executeTool(tool, argsObject);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (/parse input arguments|is not an object|invalid input object/i.test(message)) {
+      // Older API shape: retry with the raw JSON string.
+      return await mc.executeTool(tool, argsString);
+    }
+    throw err;
+  }
 }
 
 /* ---- Chrome Prompt API (LanguageModel) ---------------------------------- */
@@ -115,7 +146,35 @@ async function handle(req: BridgeRequest): Promise<void> {
         });
         return;
       }
-      const result = await mc.executeTool(live, req.argsJson);
+      // Validate and normalize the incoming arguments. We carry them across the
+      // message boundary as a JSON string; parse to an object for the newer API
+      // shape, but keep the original string for the older/stable API shape.
+      let argsObject: Record<string, unknown>;
+      const argsString = req.argsJson.trim() === "" ? "{}" : req.argsJson;
+      try {
+        const parsed = JSON.parse(argsString);
+        if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("arguments must be a JSON object");
+        }
+        argsObject = parsed as Record<string, unknown>;
+      } catch (parseErr) {
+        post({
+          source: SOURCE,
+          direction: "response",
+          id: req.id,
+          ok: false,
+          error: `Invalid arguments for tool "${req.toolName}": ${
+            parseErr instanceof Error ? parseErr.message : String(parseErr)
+          }`,
+        });
+        return;
+      }
+
+      // Chrome channels disagree on the argument shape: newer/Beta builds want
+      // a JS object, older/stable builds want a JSON string and throw
+      // "Failed to parse input arguments" when given an object. Try the
+      // spec-compliant object form first, then fall back to the string form.
+      const result = await executeWithArgCompat(mc, live, argsObject, argsString);
       const text =
         result == null
           ? "(no result — the tool may have triggered a navigation)"
