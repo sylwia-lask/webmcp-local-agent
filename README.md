@@ -24,8 +24,13 @@ The agent then:
 6. loops (up to a step limit) if the model wants another tool,
 7. shows the final answer.
 
-Everything runs locally. Nothing is published to the Chrome Web Store, and the
-only network call is to your local Ollama.
+Nothing is published to the Chrome Web Store. Where your data goes depends on
+the provider you pick:
+
+- **Chrome Prompt API** and **Ollama** run entirely on your machine — no data
+  leaves the device.
+- **Gemini (cloud)** sends your prompt and the page's tool descriptions to
+  Google's API. Use it only when you're comfortable with that.
 
 ---
 
@@ -41,7 +46,7 @@ a tiny main-world "page bridge" that talks to the content script over
      │  chrome.runtime port ("agent")
      ▼
  Service Worker  (service-worker.ts)          ── fetch ──►  Ollama  (localhost:11434)
-     │   runs the agent loop (agent.ts + ollama.ts)
+     │   runs the agent loop (agent.ts + the selected provider)
      │  chrome.tabs.sendMessage
      ▼
  Content Script  (content-script.ts, isolated world)
@@ -99,9 +104,11 @@ webmcp-local-agent/
 
 ## Requirements
 
-- **Chrome / Chromium** with the experimental WebMCP flag (see step 7).
+- **Chrome / Chromium** with the experimental WebMCP flag (see step 8).
 - **Node.js** 18+ (to build the extension).
-- **Ollama** (local model server).
+- **Ollama** (local model server) — only for the Ollama provider. The default
+  Chrome Prompt API provider needs no Ollama; the Gemini provider needs an API
+  key instead.
 
 ---
 
@@ -247,15 +254,22 @@ npx serve test-page
 # open the printed http://localhost:xxxx URL
 ```
 
-The page registers two WebMCP tools: `createEmployee` and `listEmployees`.
-Reload the tab after loading the extension, make sure you see the green
-"WebMCP tools registered" status, then type in the panel:
+The page registers three WebMCP tools: `createEmployee`, `listEmployees`, and
+`deleteAllEmployees`. Reload the tab after loading the extension, make sure you
+see the green "WebMCP tools registered" status, then type in the panel:
 
 > Add a new employee named John Smith
 
 then e.g.:
 
 > Add John Smith and Jane Doe, then list all employees
+
+`deleteAllEmployees` is marked `consequentialHint: true`, so it's a good way to
+see the confirmation flow. Try:
+
+> Delete all employees
+
+and the agent will ask you to confirm before running it.
 
 ### Option B — any WebMCP-enabled site
 
@@ -265,7 +279,7 @@ natural-language command.
 **What you'll see in the log:** your prompt → discovered WebMCP tools → the tool
 call the model chose + arguments → the tool result → the final answer.
 
-### Switching providers (Ollama ↔ Chrome Prompt API)
+### Switching providers (Chrome Prompt API / Ollama / Gemini)
 
 At the top of the panel, use the **Provider** dropdown:
 
@@ -291,7 +305,7 @@ in the log instead of a crash.
 
 ## LLM providers
 
-Both providers implement one interface (`extension/src/agent/llm.ts`):
+All three providers implement one interface (`extension/src/agent/llm.ts`):
 
 ```ts
 interface LlmProvider {
@@ -363,11 +377,29 @@ The agent can only call tools that the current page actually exposes via WebMCP.
 Before every execution it checks:
 
 - the tool name is in the freshly-fetched list from this page,
-- the arguments parse as a JSON object.
+- the arguments parse as a JSON object,
+- **consequential tools require confirmation** — if a tool's
+  `annotations.consequentialHint` is `true` (a high-stakes or non-reversible
+  action, per the WebMCP secure-tools guidance), the agent pauses and asks the
+  user to approve it before running. Declining skips execution.
 
 The agent never runs `eval`, never executes model-authored JavaScript, and never
 touches the DOM directly. Execution goes only through
 `document.modelContext.executeTool`.
+
+### `executeTool` argument shape across Chrome channels
+
+The WebMCP API is still experimental and different Chrome channels disagree on
+the argument shape for `executeTool`:
+
+- Newer/Beta builds follow the current spec and expect a **JavaScript object**.
+- Older/stable builds expect a **JSON string** and throw
+  `Failed to parse input arguments` when handed an object.
+
+The page bridge (`content/page-bridge.ts`) handles both: it tries the
+spec-compliant object form first, and if that fails with an argument-shape
+error, it retries with the raw JSON string. Genuine tool errors are surfaced
+unchanged. This lets a single build work on both channels.
 
 ## Memory management (RAM/VRAM)
 
